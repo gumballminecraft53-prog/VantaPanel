@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>VantaPanel - Core Control</title>
+    <style>
+        body { background-color: #0b0b0f; color: #e1e1e6; font-family: monospace; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: #121218; padding: 30px; border-radius: 8px; border: 1px solid #272730; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
+        h1, h2 { color: #00ffcc; text-shadow: 0 0 10px rgba(0,255,204,0.3); }
+        input, select, textarea { width: 100%; padding: 10px; margin: 10px 0; background: #181820; border: 1px solid #333; color: #fff; border-radius: 4px; }
+        button { background: #00ffcc; color: #000; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 4px; transition: 0.2s; }
+        button:hover { background: #00cca3; box-shadow: 0 0 10px #00ffcc; }
+        .card { background: #181822; padding: 15px; margin: 10px 0; border-radius: 6px; border-left: 4px solid #00ffcc; }
+        pre { background: #000; padding: 15px; color: #00ff00; border-radius: 5px; height: 150px; overflow-y: scroll; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>VantaPanel // WORM Architecture</h1>
+        
+        <!-- قسم تسجيل الدخول / التسجيل -->
+        <div id="auth-section">
+            <h2>تسجيل الدخول / إنشاء حساب</h2>
+            <input type="text" id="username" placeholder="اسم المستخدم">
+            <input type="password" id="password" placeholder="كلمة المرور">
+            <button onclick="login()">دخول</button>
+            <button onclick="register()" style="background:#333; color:#fff;">تسجيل حساب جديد</button>
+        </div>
+
+        <!-- لوحة التحكم الرئيسية -->
+        <div id="dashboard-section" class="hidden">
+            <h2>لوحة العمليات والسكربتات</h2>
+            <button onclick="toggleNewModal()">+ New Script Instance</button>
+            
+            <div id="new-modal" class="hidden" style="margin-top:20px; border:1px dashed #444; padding:15px;">
+                <h3>إنشاء سكربت جديد</h3>
+                <input type="text" id="script-name" placeholder="اسم السكربت (مثال: DiscordBot)">
+                <select id="script-type">
+                    <option value="python">Python</option>
+                    <option value="node">Node.js</option>
+                </select>
+                <textarea id="script-code" rows="5" placeholder="اكتب الكود هنا..."></textarea>
+                <button onclick="createServer()">حفظ وتشغيل</button>
+            </div>
+
+            <div id="instances-list" style="margin-top: 20px;"></div>
+        </div>
+    </div>
+
+    <script>
+        async function register() {
+            let u = document.getElementById('username').value;
+            let p = document.getElementById('password').value;
+            let res = await fetch('/api/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: u, password: p}) });
+            let data = await res.json();
+            if(data.success) alert('تم التسجيل بنجاح، سجل دخولك الآن');
+            else alert(data.error);
+        }
+
+        async function login() {
+            let u = document.getElementById('username').value;
+            let p = document.getElementById('password').value;
+            let res = await fetch('/api/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: u, password: p}) });
+            let data = await res.json();
+            if(data.success) {
+                document.getElementById('auth-section').classList.add('hidden');
+                document.getElementById('dashboard-section').classList.remove('hidden');
+                loadInstances();
+            } else alert(data.error);
+        }
+
+        function toggleNewModal() {
+            let m = document.getElementById('new-modal');
+            m.classList.toggle('hidden');
+        }
+
+        async function createServer() {
+            let name = document.getElementById('script-name').value;
+            let type = document.getElementById('script-type').value;
+            let code = document.getElementById('script-code').value;
+            
+            let res = await fetch('/api/instances/new', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, script_type: type, code}) });
+            let data = await res.json();
+            if(data.success) {
+                toggleNewModal();
+                loadInstances();
+            }
+        }
+
+        async function loadInstances() {
+            let res = await fetch('/api/instances');
+            let list = await res.json();
+            let html = '';
+            list.forEach(inst => {
+                html += `
+                    <div class="card">
+                        <h3>${inst.name} (${inst.script_type}) - الحالة: ${inst.status}</h3>
+                        <button onclick="startInst(${inst.id})" style="background:#00ffcc;">تشغيل</button>
+                        <button onclick="stopInst(${inst.id})" style="background:#ff3333; color:#fff;">إيقاف</button>
+                        <button onclick="fetchLogs(${inst.id})" style="background:#333; color:#fff;">تحديث السجلات</button>
+                        <pre id="logs-${inst.id}">اضغط تحديث لعرض المخرجات...</pre>
+                    </div>
+                `;
+            });
+            document.getElementById('instances-list').innerHTML = html;
+        }
+
+        async function startInst(id) {
+            await fetch(`/api/instances/${id}/start`, {method: 'POST'});
+            loadInstances();
+        }
+
+        async function stopInst(id) {
+            await fetch(`/api/instances/${id}/stop`, {method: 'POST'});
+            loadInstances();
+        }
+
+        async function fetchLogs(id) {
+            let res = await fetch(`/api/instances/${id}/logs`);
+            let data = await res.json();
+            document.getElementById(`logs-${id}`).innerText = data.logs;
+        }
+    </script>
+</body>
+</html>
